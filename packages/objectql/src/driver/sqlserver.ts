@@ -43,7 +43,8 @@ export class SteedosSqlServerDriver extends SteedosTypeormDriver {
             username: this.config.username,
             password: this.config.password,
             database: this.config.database,
-            options: this.config.options,
+            //options: this.config.options,
+            options: {encrypt: false},
             logging: this.config.logging
         };
     }
