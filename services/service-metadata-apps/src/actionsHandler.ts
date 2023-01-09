@@ -356,8 +356,10 @@ async function getAppsMenus(ctx) {
         throw new Error('no permission.')
     }
     let assigned_apps = await getAssignedApps(userSession);
-    const mobile = ctx.params.mobile;
-    
+    let mobile = ctx.params.mobile;
+    if(typeof mobile !== 'boolean'){
+        mobile = mobile === "true" ? true : false;
+    }
     const spaceId = userSession.spaceId;
     const metadataApps = await getAllApps(ctx);
     const context = await getContext(ctx)
@@ -371,6 +373,16 @@ async function getAppsMenus(ctx) {
         if(!config.is_creator || !config.visible){
             return false;
         }
+
+        if(config._id === config.code){
+            let dbApp = _.find(assigned_apps, (item)=>{
+                return item.code === config.code && item._id != item.code && item.space === spaceId;
+            });
+            if(dbApp){
+                return dbApp.visible
+            }
+        }
+
         if (_.has(config, 'space') && config.space) {
             return config.space === spaceId;
         }
@@ -400,16 +412,15 @@ async function getAppsMenus(ctx) {
         }
     }
     if(!mobile){
-        menus.push(
-            {
-                id: 'admin',
-                path: '/app/admin',
-                name: '设置',
-                icon: 'settings',
-                description: '管理员设置公司、人员、权限等。',
-                children: []
-            }
-        )
+        const setupApp = {
+            code: 'admin',
+            name: '设置',
+            icon_slds: 'settings',
+            description: '管理员设置公司、人员、权限等。',
+            children: []
+        }
+        const menu = await transformAppToMenus(ctx, setupApp, mobile, userSession, context);
+        menus.push(menu);
     }
     return menus;
 }

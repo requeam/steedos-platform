@@ -6,6 +6,7 @@ const triggerLoader = require('./lib').triggerLoader;
 const path = require('path');
 const Future = require('fibers/future');
 const _ = require('lodash');
+const metaDataCore = require('@steedos/metadata-core');
 /**
  * @typedef {import('moleculer').Context} Context Moleculer's Context
  */
@@ -58,6 +59,13 @@ module.exports = {
 
                 let routersData = objectql.loadRouters(packagePath);
                 let oldRoutersInfo = await this.broker.call(`@steedos/service-packages.getPackageRoutersInfo`, {packageName: name})
+
+                // routersData.forEach(element => {
+                //     if(element.router.default === require('@steedos/router').staticRouter()){
+                //         objectql.broker.broker.logger.warn(`router error, packagePath: ${packagePath} `);
+                //     }
+                // });
+
                 let routersInfo = _.flattenDeep(_.map(routersData, 'infoList'));
                 if(oldRoutersInfo){
                     _.each(oldRoutersInfo.metadata, (info)=>{
@@ -78,13 +86,32 @@ module.exports = {
                 await this.broker.emit(`translations.object.change`, {});
 				return;
 			}).promise();
-		}
+		},
+        loadPackageMetadataServices: async function (packagePath) {
+            const filePatten = [
+                path.join(packagePath, 'main', 'default', 'services', "**", `*.service.js`),
+                "!" + path.join(packagePath, "**", "node_modules"),
+            ];
+            const matchedPaths = metaDataCore.syncMatchFiles(filePatten);
+            for await (const serviceFilePath of matchedPaths) {
+                try {
+                    const service = objectql.loadService(this.broker, serviceFilePath);
+                    this.packageServices.push(service);
+                    if (!this.broker.started) {
+                        this.broker._restartService(service)
+                    }
+                } catch (error) {
+                    this.logger.error(error)
+                }
+            }
+        },
 	},
 
     /**
      * Service created lifecycle event handler
      */
     created() {
+        this.packageServices = [];  //此属性不能放到settings下，否则会导致mo clone settings 时 内存溢出。
         this.logger.debug('service package loader created!!!');
     },
 
@@ -108,6 +135,9 @@ module.exports = {
             return;
         }
         await this.loadPackageMetadataFiles(path, this.name);
+
+        await this.loadPackageMetadataServices(path);
+
         console.timeEnd(`service ${this.name} started`)
         // console.log(`service ${this.name} started`);
     },
